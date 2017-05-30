@@ -131,22 +131,25 @@ class PredictThread(QThread):
 
 # ***************************** Loading, parsing funcs *********************************
 			
-#Tranforms an excel sheet to features
-def sheet2features(sheet,horse):
+
+#Extracts features from an excel sheet 
+def sheet2features(sheet,runner,Nbr=8,EndValues=[0,1000]):
 	features=[]
 	target=[]
-	for h in horse:
-		#Features and target are updated with the total horse recordings
+	for h in runner:
 		r=3
-		inf=h*8
+		inf=h*Nbr	
 		while r < sheet.nrows:
 				price=sheet.row(r)[inf+2].value
 				#If the race is not over
-				if price!=1000 and price!=0: 
+				if price not in EndValues: 
 					features.append([i.value for i in sheet.row(r)[inf+2:inf+5]])
 					target.append(0 if sheet.row(r)[inf+6].value==-2 else 1)
 				r+=1
 	return features,target
+  
+
+
 #Loads all excel files in a directory	used for offline testing
 def load_data(files):
 	features=[]
@@ -182,38 +185,35 @@ def Lv1tofeatures(filename):
             line=[line[-1]]
             
      
-            text= line[0]
-            out_string = []
-            for word in text:
-                   tmp=re.sub("[^\sa-zA-Z]+", "", word)
-                   if tmp:
-                         out_string.append(tmp)
-            num_horse= len(out_string)
-            names=out_string
+
+            for word in line[0]:
+                   name=re.sub("[^\sa-zA-Z]+", "", word)
+                   if name:
+                         names.append(name)
+            num_horse= len(names)         
             
             for j,l in zip(line,range(len(line))):
                     for i in range(3,6*num_horse+3,6):
                             if len(j[i:i+3])==3:
-				for s in j[i:i+3]:
-					if not isinstance(s,float) and not isinstance(s,int):
-						print "Error of format in file at line:",l
-                            	features.append(j[i:i+3])
+					for s in j[i:i+3]:
+						if not isinstance(s,float) and not isinstance(s,int):
+							print "Error of format in file at line:",l
+                        		features.append(j[i:i+3])
                    
                         
             return features,names,num_horse,row
         else:
             return features,names,num_horse,row
 
-#Read records each evening from R1.txt and returns, ready for prediction, features
-def readR(filename):
-        print "reading R"
+
+#Reads files for offline prediction
+#Reads records each evening from R1.txt and returns, ready for prediction, features
+def readR(filename,EndValues=[0,1000]):
 	features=[]
 	target=[]
 	names=[]
 	lines = [line.rstrip('\n') for line in open(filename)]
-	
-	if lines:
-            
+	if lines:         
             #Extract winner name
             winner=lines[0].strip().split(",")[-1]
             winner=" ".join(winner.split())
@@ -222,30 +222,25 @@ def readR(filename):
             #Parse features
             line=[l.strip().split(",")[1:] for l in lines]
             #Learn num of horses
-            text= line[0]
-            out_string = []
-            for word in text:
-                    tmp=re.sub("[^\sa-zA-Z]+", "", word)
-                    if tmp:
-                            out_string.append(tmp)
-            num_horse= len(out_string)
-            #Build feature matrix each row [price spread amt_matched P&L]
+            for word in line[0]:
+                   name=re.sub("[^\sa-zA-Z]+", "", word)
+                   if name:
+                         names.append(name)
+            num_runners= len(names)
+            
+            #Build feature matrix each row 
             for j in line:
-                    
-                    for i,n in zip(range(3,6*num_horse+3,6),range(0,6*num_horse,6)):
-                            horseName=j[n]
-                            #Extract price, spread and amt_matched
-                            psa=[float(s) for s in j[i:i+3]]
-                            price=psa[0]
-                            #Compute P&L feature
-                            if price!=1000 and price!=0:
-                                    
-                                    if str(horseName)==winner:
+                    for i,n in zip(range(3,6*num_runners+3,6),range(0,6*num_runners,6)):
+                            runnerName=j[n]
+                            #Extract features
+                            psa=[float(s) for s in j[i:i+3]]                                           
+                            if psa[0] not in EndValues:
+                                    if str(runnerName)==winner:
                                             target.append(1)
                                     else:
                                             target.append(0)				
                                     features.append(psa)
-        return features,target
+        return features,target            
 
 
 # ********************Training, testing and prediction funcs ******************
